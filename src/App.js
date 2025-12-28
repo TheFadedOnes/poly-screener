@@ -1,25 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
-import { ethers } from 'ethers';
 
 const TOKENS = [
   { 
     symbol: 'BTC', 
     name: 'Bitcoin', 
-    color: '#f7931a',
-    chainlinkFeed: '0xc907E116054Ad103354f2D350FD2514433D57F6f'
+    color: '#f7931a'
   },
   { 
     symbol: 'ETH', 
     name: 'Ethereum', 
-    color: '#627eea',
-    chainlinkFeed: '0xF9680D99D6C9589e2a93a78A04A279e509205945'
+    color: '#627eea'
   },
   { 
     symbol: 'SOL', 
     name: 'Solana', 
-    color: '#14f195',
-    chainlinkFeed: '0x10C8264C0935b3B9870013e057f330Ff3e9C56dC'
+    color: '#14f195'
   }
 ];
 
@@ -30,11 +26,6 @@ const TIMEFRAMES = [
   { label: '1 Day', slug: '1d', windowMinutes: 1440 }
 ];
 
-const CHAINLINK_ABI = [
-  "function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
-  "function decimals() external view returns (uint8)"
-];
-
 function App() {
   const [marketData, setMarketData] = useState({});
   const [startPrices, setStartPrices] = useState({});
@@ -42,7 +33,6 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [currentWindows, setCurrentWindows] = useState({});
   const [refreshing, setRefreshing] = useState(false);
-  const [provider, setProvider] = useState(null);
   const [countdowns, setCountdowns] = useState({});
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode');
@@ -89,19 +79,6 @@ function App() {
   };
 
   const t = darkMode ? theme.dark : theme.light;
-
-  useEffect(() => {
-    const alchemyKey = process.env.REACT_APP_ALCHEMY_API_KEY;
-    if (!alchemyKey) {
-      console.error('Missing Alchemy API key in .env file');
-      return;
-    }
-    
-    const alchemyProvider = new ethers.JsonRpcProvider(
-      `https://polygon-mainnet.g.alchemy.com/v2/${alchemyKey}`
-    );
-    setProvider(alchemyProvider);
-  }, []);
 
   const getWindowStart = useCallback((windowMinutes) => {
     const now = new Date();
@@ -239,28 +216,15 @@ function App() {
   };
 
   const fetchChainlinkPrices = useCallback(async () => {
-    if (!provider) return;
-    
     setRefreshing(true);
     try {
-      const prices = {};
+      const response = await fetch('/api/prices');
+      const prices = await response.json();
       
-      for (const token of TOKENS) {
-        try {
-          const contract = new ethers.Contract(
-            token.chainlinkFeed,
-            CHAINLINK_ABI,
-            provider
-          );
-          
-          const roundData = await contract.latestRoundData();
-          const decimals = await contract.decimals();
-          
-          const price = Number(roundData.answer) / Math.pow(10, Number(decimals));
-          prices[token.symbol] = price;
-        } catch (err) {
-          console.error(`Error fetching ${token.symbol}:`, err);
-        }
+      if (prices.error) {
+        console.error('API error:', prices.error);
+        setRefreshing(false);
+        return;
       }
 
       setMarketData(prices);
@@ -294,28 +258,26 @@ function App() {
       console.error('Error fetching prices:', err);
     }
     setRefreshing(false);
-  }, [provider, currentWindows, startPrices, getWindowStart]);
+  }, [currentWindows, startPrices, getWindowStart]);
 
   useEffect(() => {
-    if (!provider) return;
-    
     const initialize = async () => {
       await fetchChainlinkPrices();
       setLoading(false);
     };
 
     initialize();
-  }, [provider, fetchChainlinkPrices]);
+  }, [fetchChainlinkPrices]);
 
   useEffect(() => {
-    if (!provider || loading) return;
+    if (loading) return;
 
     const interval = setInterval(() => {
       fetchChainlinkPrices();
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [provider, loading, fetchChainlinkPrices]);
+  }, [loading, fetchChainlinkPrices]);
 
   const calculateChange = (current, start) => {
     if (!start || start === 0) return { value: 0, percent: 0 };

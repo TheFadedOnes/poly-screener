@@ -216,18 +216,22 @@ function App() {
   };
 
   const fetchChainlinkPrices = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const response = await fetch('/api/prices');
-      const prices = await response.json();
-      
-      if (prices.error) {
-        console.error('API error:', prices.error);
-        setRefreshing(false);
-        return;
-      }
+  setRefreshing(true);
+  try {
+    // Always use deployed URL for now
+    const response = await fetch('https://poly-screener.vercel.app/api/prices');
+    const prices = await response.json();
+    
+    console.log('Fetched prices:', prices); // Debug log
+    
+    if (prices.error) {
+      console.error('API error:', prices.error);
+      setRefreshing(false);
+      return;
+    }
 
-      setMarketData(prices);
+    setMarketData(prices);
+    
       
       const newWindows = {};
       const newStartPrices = { ...startPrices };
